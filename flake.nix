@@ -1,6 +1,6 @@
 {
 	inputs = {
-		nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+		nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
 		hooks = {
 			url = "github:cachix/git-hooks.nix";
@@ -79,8 +79,11 @@
 											;
 									});
 
-							env.RUST_SRC_PATH = "${pkgs.rustToolchain}/lib/rustlib/src/rust/library";
-							env.LD_LIBRARY_PATH = "${pkgs.openssl.out}/lib";
+							env = {
+								RUST_SRC_PATH = "${pkgs.rustToolchain}/lib/rustlib/src/rust/library";
+								LD_LIBRARY_PATH = "${pkgs.openssl.out}/lib";
+								PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+							};
 						};
 				});
 
@@ -101,10 +104,15 @@
 				});
 
 		checks =
-			forAllSystems ({system, ...}: {
+			forAllSystems ({
+					system,
+					pkgs,
+					...
+				}: {
 					pre-commit-check =
 						hooks.lib.${system}.run {
 							src = ./.;
+							package = pkgs.prek;
 							hooks = {
 								convco.enable = true;
 								alejandra.enable = true;
