@@ -48,17 +48,11 @@ impl RelayService {
 		name: String,
 		port: u16,
 	) -> Self {
-		let transport = if port == 25 {
-			AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&server)
-				.port(port)
-				.build()
-		} else {
-			AsyncSmtpTransport::<Tokio1Executor>::relay(&server)
-				.expect("invalid SMTP server")
-				.credentials(Credentials::new(user.clone(), pass))
-				.port(port)
-				.build()
-		};
+		let transport = AsyncSmtpTransport::<Tokio1Executor>::relay(&server)
+			.expect("invalid SMTP server")
+			.credentials(Credentials::new(user.clone(), pass))
+			.port(port)
+			.build();
 
 		RelayService { transport, user, name }
 	}
@@ -122,7 +116,7 @@ async fn main() -> std::io::Result<()> {
 	let addr = format!("{}:{}", host, port);
 
 	let email_service = RelayService::new(
-		env::var("SMPT_HOST").expect("SMPT_HOST must be set"),
+		env::var("SMTP_HOST").expect("SMTP_HOST must be set"),
 		env::var("SMTP_USER").expect("SMTP_USER must be set"),
 		env::var("SMTP_PASS").expect("SMTP_PASS must be set"),
 		env::var("SMTP_NAME").unwrap_or_else(|_| "Relay".to_string()),
