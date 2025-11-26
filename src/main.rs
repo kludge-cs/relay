@@ -122,7 +122,7 @@ async fn main() -> std::io::Result<()> {
 	let addr = format!("{}:{}", host, port);
 
 	let email_service = RelayService::new(
-		env::var("SMTP_SERVER").expect("SMTP_SERVER must be set"),
+		env::var("SMPT_HOST").expect("SMPT_HOST must be set"),
 		env::var("SMTP_USER").expect("SMTP_USER must be set"),
 		env::var("SMTP_PASS").expect("SMTP_PASS must be set"),
 		env::var("SMTP_NAME").unwrap_or_else(|_| "Relay".to_string()),
