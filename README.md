@@ -1,3 +1,4 @@
+
 # 📬 Relay
 
 Relay messages into your inbox via HTTP.
@@ -7,7 +8,7 @@ Relay messages into your inbox via HTTP.
 ### Cargo
 
 ```sh
-$ cargo install
+$ cargo install --path .
 ```
 
 ### Nix
