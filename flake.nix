@@ -59,7 +59,7 @@
 					pkgs,
 					system,
 				}: let
-					check = self.checks.${system}.pre-commit-check;
+					check = self.checks.${system}.pre-commit;
 				in {
 					default =
 						pkgs.mkShell {
@@ -109,7 +109,7 @@
 					pkgs,
 					...
 				}: {
-					pre-commit-check =
+					pre-commit =
 						hooks.lib.${system}.run {
 							src = ./.;
 							package = pkgs.prek;
