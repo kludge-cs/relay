@@ -1,4 +1,5 @@
 mod config;
+mod middleware;
 
 use actix_web::{
 	App,
@@ -9,6 +10,7 @@ use actix_web::{
 	post,
 	web::{self, Json},
 };
+use actix_web_httpauth::middleware::HttpAuthentication;
 use dotenvy::dotenv;
 use lettre::{
 	AsyncSmtpTransport,
@@ -19,7 +21,10 @@ use lettre::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::config::{RelayConfig, RelaySMTPConfig};
+use crate::{
+	config::{RelayConfig, RelaySMTPConfig},
+	middleware::auth,
+};
 
 #[derive(Serialize, Deserialize)]
 struct RelayRequest {
@@ -114,15 +119,20 @@ async fn main() -> std::io::Result<()> {
 	let config = RelayConfig::from_env();
 	let addr = format!("{}:{}", config.host, config.port);
 
-	let service = RelayService::new(config.smtp);
+	let service = RelayService::new(config.smtp.clone());
 	log::info!("starting server at {}", addr);
 
 	HttpServer::new(move || {
 		App::new()
 			.app_data(web::Data::new(service.clone()))
+			.app_data(web::Data::new(config.clone()))
 			.wrap(Logger::default())
 			.service(health)
-			.service(email)
+			.service(
+				web::scope("")
+					.wrap(HttpAuthentication::bearer(auth))
+					.service(email),
+			)
 	})
 	.bind(addr)?
 	.run()

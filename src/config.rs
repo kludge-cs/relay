@@ -1,5 +1,6 @@
 use std::env;
 
+#[derive(Clone)]
 pub struct RelaySMTPConfig {
 	pub host: String,
 	pub user: String,
@@ -8,6 +9,7 @@ pub struct RelaySMTPConfig {
 	pub port: u16,
 }
 
+#[derive(Clone)]
 pub struct RelayConfig {
 	pub port: u16,
 	pub key: String,
