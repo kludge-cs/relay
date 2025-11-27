@@ -1,4 +1,4 @@
-use std::env;
+mod config;
 
 use actix_web::{
 	App,
@@ -18,6 +18,8 @@ use lettre::{
 	transport::smtp::authentication::Credentials,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::config::{RelayConfig, RelaySMTPConfig};
 
 #[derive(Serialize, Deserialize)]
 struct RelayRequest {
@@ -41,20 +43,18 @@ struct RelayService {
 }
 
 impl RelayService {
-	fn new(
-		server: String,
-		user: String,
-		pass: String,
-		name: String,
-		port: u16,
-	) -> Self {
-		let transport = AsyncSmtpTransport::<Tokio1Executor>::relay(&server)
-			.expect("invalid SMTP server")
-			.credentials(Credentials::new(user.clone(), pass))
-			.port(port)
-			.build();
+	fn new(config: RelaySMTPConfig) -> Self {
+		let transport =
+			AsyncSmtpTransport::<Tokio1Executor>::relay(&config.host)
+				.expect("invalid SMTP server")
+				.credentials(Credentials::new(
+					config.user.clone(),
+					config.pass.clone(),
+				))
+				.port(config.port)
+				.build();
 
-		RelayService { transport, user, name }
+		Self { transport, user: config.user, name: config.name }
 	}
 
 	async fn send(
@@ -64,20 +64,20 @@ impl RelayService {
 		let from = Mailbox::new(Some(self.name.clone()), self.user.parse()?);
 		let to = Mailbox::new(req.name.clone(), req.to.parse()?);
 
-		let email = MessageBuilder::new()
+		let message = MessageBuilder::new()
 			.from(from)
 			.to(to)
 			.subject(&req.subject)
 			.header(ContentType::TEXT_PLAIN)
 			.body(req.body.clone())?;
 
-		self.transport.send(email).await?;
+		self.transport.send(message).await?;
 		Ok(())
 	}
 }
 
 #[get("/")]
-pub async fn health_check() -> impl Responder {
+pub async fn health() -> impl Responder {
 	Json(RelayResponse {
 		success: true,
 		message: "relay is running".to_string(),
@@ -85,7 +85,7 @@ pub async fn health_check() -> impl Responder {
 }
 
 #[post("/")]
-pub async fn send_email(
+pub async fn email(
 	service: web::Data<RelayService>,
 	req: Json<RelayRequest>,
 ) -> impl Responder {
@@ -111,29 +111,18 @@ async fn main() -> std::io::Result<()> {
 	dotenv().ok();
 	env_logger::init();
 
-	let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-	let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
-	let addr = format!("{}:{}", host, port);
+	let config = RelayConfig::from_env();
+	let addr = format!("{}:{}", config.host, config.port);
 
-	let email_service = RelayService::new(
-		env::var("SMTP_HOST").expect("SMTP_HOST must be set"),
-		env::var("SMTP_USER").expect("SMTP_USER must be set"),
-		env::var("SMTP_PASS").expect("SMTP_PASS must be set"),
-		env::var("SMTP_NAME").unwrap_or_else(|_| "Relay".to_string()),
-		env::var("SMTP_PORT")
-			.unwrap_or_else(|_| "587".to_string())
-			.parse()
-			.expect("SMTP_PORT must be a number"),
-	);
-
+	let service = RelayService::new(config.smtp);
 	log::info!("starting server at {}", addr);
 
 	HttpServer::new(move || {
 		App::new()
-			.app_data(web::Data::new(email_service.clone()))
+			.app_data(web::Data::new(service.clone()))
 			.wrap(Logger::default())
-			.service(health_check)
-			.service(send_email)
+			.service(health)
+			.service(email)
 	})
 	.bind(addr)?
 	.run()

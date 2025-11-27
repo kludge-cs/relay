@@ -37,6 +37,7 @@ $ nix profile install github:kludge-cs/relay
 | `SMTP_HOST` | SMTP host to connect to       | error       |
 | `SMTP_USER` | SMTP user to connect as       | error       |
 | `SMTP_PASS` | SMTP password to connect with | error       |
+| `API_KEY`   | Authentication token          | error       |
 
 ## 📝 Usage
 
