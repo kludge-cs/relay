@@ -1,7 +1,13 @@
-use actix_web::{Error, dev::ServiceRequest, error::ErrorUnauthorized, web};
+use actix_web::{
+	Error,
+	dev::ServiceRequest,
+	error::InternalError,
+	http::StatusCode,
+	web,
+};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 
-use crate::config::RelayConfig;
+use crate::{config::RelayConfig, service::RelayResponse};
 
 pub async fn auth(
 	req: ServiceRequest,
@@ -14,6 +20,12 @@ pub async fn auth(
 	if cred.token() == cfg.key {
 		Ok(req)
 	} else {
-		Err((ErrorUnauthorized("invalid api key"), req))
+		let response = RelayResponse::respond(
+			StatusCode::UNAUTHORIZED,
+			false,
+			"invalid api key",
+		);
+
+		Err((InternalError::from_response("", response).into(), req))
 	}
 }

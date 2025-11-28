@@ -7,12 +7,14 @@ use actix_web::{
 	HttpServer,
 	Responder,
 	get,
+	http::StatusCode,
 	middleware::Logger,
 	post,
 	web::{self, Json},
 };
 use actix_web_httpauth::middleware::HttpAuthentication;
 use dotenvy::dotenv;
+use validator::Validate;
 
 use crate::{
 	config::RelayConfig,
@@ -22,7 +24,7 @@ use crate::{
 
 #[get("/")]
 pub async fn health() -> impl Responder {
-	RelayResponse::json(true, "relay is running")
+	RelayResponse::respond(StatusCode::OK, true, "relay is running")
 }
 
 #[post("/")]
@@ -30,13 +32,30 @@ pub async fn email(
 	service: web::Data<RelayService>,
 	req: Json<RelayRequest>,
 ) -> impl Responder {
+	if let Err(e) = req.validate() {
+		return RelayResponse::respond(
+			StatusCode::BAD_REQUEST,
+			false,
+			&format!("validation error: {}", e),
+		);
+	}
+
 	log::info!("sending email to={} subject={}", req.to, req.subject);
 
 	match service.send(&req).await {
-		Ok(_) => RelayResponse::json(true, "email sent successfully"),
+		Ok(_) => RelayResponse::respond(
+			StatusCode::OK,
+			true,
+			"email sent successfully",
+		),
 		Err(e) => {
 			log::error!("failed to send email {}", e);
-			RelayResponse::json(false, &format!("failed to send email {}", e))
+
+			RelayResponse::respond(
+				StatusCode::INTERNAL_SERVER_ERROR,
+				false,
+				&format!("failed to send email {}", e),
+			)
 		}
 	}
 }

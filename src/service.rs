@@ -1,4 +1,4 @@
-use actix_web::web::Json;
+use actix_web::{HttpResponse, http::StatusCode};
 use lettre::{
 	AsyncSmtpTransport,
 	AsyncTransport,
@@ -7,14 +7,21 @@ use lettre::{
 	transport::smtp::authentication::Credentials,
 };
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 use crate::config::RelaySMTPConfig;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Validate)]
 pub struct RelayRequest {
+	#[validate(email)]
 	pub to: String,
-	pub body: String,
+
+	#[validate(length(min = 1, max = 256, message = "cannot be empty"))]
 	pub subject: String,
+
+	#[validate(length(min = 1, max = 256_000, message = "cannot be empty"))]
+	pub body: String,
+
 	pub name: Option<String>,
 }
 
@@ -32,8 +39,13 @@ pub struct RelayService {
 }
 
 impl RelayResponse {
-	pub fn json(success: bool, message: &str) -> Json<RelayResponse> {
-		Json(Self { success, message: message.to_string() })
+	pub fn respond(
+		status: StatusCode,
+		success: bool,
+		message: &str,
+	) -> HttpResponse {
+		HttpResponse::build(status)
+			.json(Self { success, message: message.to_string() })
 	}
 }
 
