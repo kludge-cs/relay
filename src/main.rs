@@ -1,5 +1,6 @@
 mod config;
 mod middleware;
+mod service;
 
 use actix_web::{
 	App,
@@ -12,81 +13,16 @@ use actix_web::{
 };
 use actix_web_httpauth::middleware::HttpAuthentication;
 use dotenvy::dotenv;
-use lettre::{
-	AsyncSmtpTransport,
-	AsyncTransport,
-	Tokio1Executor,
-	message::{Mailbox, MessageBuilder, header::ContentType},
-	transport::smtp::authentication::Credentials,
-};
-use serde::{Deserialize, Serialize};
 
 use crate::{
-	config::{RelayConfig, RelaySMTPConfig},
+	config::RelayConfig,
 	middleware::auth,
+	service::{RelayRequest, RelayResponse, RelayService},
 };
-
-#[derive(Serialize, Deserialize)]
-struct RelayRequest {
-	to: String,
-	body: String,
-	subject: String,
-	name: Option<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct RelayResponse {
-	success: bool,
-	message: String,
-}
-
-#[derive(Clone)]
-struct RelayService {
-	transport: AsyncSmtpTransport<Tokio1Executor>,
-	user: String,
-	name: String,
-}
-
-impl RelayService {
-	fn new(config: RelaySMTPConfig) -> Self {
-		let transport =
-			AsyncSmtpTransport::<Tokio1Executor>::relay(&config.host)
-				.expect("invalid SMTP server")
-				.credentials(Credentials::new(
-					config.user.clone(),
-					config.pass.clone(),
-				))
-				.port(config.port)
-				.build();
-
-		Self { transport, user: config.user, name: config.name }
-	}
-
-	async fn send(
-		&self,
-		req: &RelayRequest,
-	) -> Result<(), Box<dyn std::error::Error>> {
-		let from = Mailbox::new(Some(self.name.clone()), self.user.parse()?);
-		let to = Mailbox::new(req.name.clone(), req.to.parse()?);
-
-		let message = MessageBuilder::new()
-			.from(from)
-			.to(to)
-			.subject(&req.subject)
-			.header(ContentType::TEXT_PLAIN)
-			.body(req.body.clone())?;
-
-		self.transport.send(message).await?;
-		Ok(())
-	}
-}
 
 #[get("/")]
 pub async fn health() -> impl Responder {
-	Json(RelayResponse {
-		success: true,
-		message: "relay is running".to_string(),
-	})
+	RelayResponse::json(true, "relay is running")
 }
 
 #[post("/")]
@@ -94,19 +30,13 @@ pub async fn email(
 	service: web::Data<RelayService>,
 	req: Json<RelayRequest>,
 ) -> impl Responder {
-	log::info!("sending email to={} subject={}", req.to, req.subject,);
+	log::info!("sending email to={} subject={}", req.to, req.subject);
 
 	match service.send(&req).await {
-		Ok(_) => Json(RelayResponse {
-			success: true,
-			message: "email sent successfully".to_string(),
-		}),
+		Ok(_) => RelayResponse::json(true, "email sent successfully"),
 		Err(e) => {
 			log::error!("failed to send email {}", e);
-			Json(RelayResponse {
-				success: false,
-				message: format!("failed to send email {}", e),
-			})
+			RelayResponse::json(false, &format!("failed to send email {}", e))
 		}
 	}
 }
