@@ -9,7 +9,7 @@ use lettre::{
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::config::RelaySMTPConfig;
+use crate::{config::RelaySMTPConfig, error::RelayError};
 
 #[derive(Serialize, Deserialize, Validate)]
 pub struct RelayRequest {
@@ -50,10 +50,10 @@ impl RelayResponse {
 }
 
 impl RelayService {
-	pub fn new(config: RelaySMTPConfig) -> Self {
+	pub fn new(config: RelaySMTPConfig) -> Result<Self, RelayError> {
 		let transport =
 			AsyncSmtpTransport::<Tokio1Executor>::relay(&config.host)
-				.expect("invalid SMTP server")
+				.map_err(|_| RelayError::InvalidSmtpServer)?
 				.credentials(Credentials::new(
 					config.user.clone(),
 					config.pass.clone(),
@@ -61,13 +61,10 @@ impl RelayService {
 				.port(config.port)
 				.build();
 
-		Self { transport, user: config.user, name: config.name }
+		Ok(Self { transport, user: config.user, name: config.name })
 	}
 
-	pub async fn send(
-		&self,
-		req: &RelayRequest,
-	) -> Result<(), Box<dyn std::error::Error>> {
+	pub async fn send(&self, req: &RelayRequest) -> Result<(), RelayError> {
 		let from = Mailbox::new(Some(self.name.clone()), self.user.parse()?);
 		let to = Mailbox::new(req.name.clone(), req.to.parse()?);
 

@@ -1,4 +1,5 @@
 mod config;
+mod error;
 mod middleware;
 mod service;
 
@@ -18,6 +19,7 @@ use validator::Validate;
 
 use crate::{
 	config::RelayConfig,
+	error::RelayError,
 	middleware::auth,
 	service::{RelayRequest, RelayResponse, RelayService},
 };
@@ -31,44 +33,27 @@ pub async fn health() -> impl Responder {
 pub async fn email(
 	service: web::Data<RelayService>,
 	req: Json<RelayRequest>,
-) -> impl Responder {
+) -> Result<impl Responder, RelayError> {
 	if let Err(e) = req.validate() {
-		return RelayResponse::respond(
-			StatusCode::BAD_REQUEST,
-			false,
-			&format!("validation error: {}", e),
-		);
+		return Err(RelayError::Validation(e.to_string()));
 	}
 
 	log::info!("sending email to={} subject={}", req.to, req.subject);
 
-	match service.send(&req).await {
-		Ok(_) => RelayResponse::respond(
-			StatusCode::OK,
-			true,
-			"email sent successfully",
-		),
-		Err(e) => {
-			log::error!("failed to send email {}", e);
+	service.send(&req).await?;
 
-			RelayResponse::respond(
-				StatusCode::INTERNAL_SERVER_ERROR,
-				false,
-				&format!("failed to send email {}", e),
-			)
-		}
-	}
+	Ok(RelayResponse::respond(StatusCode::OK, true, "email sent successfully"))
 }
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	dotenv().ok();
 	env_logger::init();
 
-	let config = RelayConfig::from_env();
+	let config = RelayConfig::from_env()?;
 	let addr = format!("{}:{}", config.host, config.port);
 
-	let service = RelayService::new(config.smtp.clone());
+	let service = RelayService::new(config.smtp.clone())?;
 	log::info!("starting server at {}", addr);
 
 	HttpServer::new(move || {
@@ -85,5 +70,7 @@ async fn main() -> std::io::Result<()> {
 	})
 	.bind(addr)?
 	.run()
-	.await
+	.await?;
+
+	Ok(())
 }
