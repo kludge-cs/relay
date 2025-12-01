@@ -6,6 +6,9 @@ pub enum RelayError {
 	#[error("missing environment variable: {0}")]
 	MissingEnvVar(String),
 
+	#[error("internal server error: {0}")]
+	InternalServerError(String),
+
 	#[error("invalid port configuration: {0}")]
 	InvalidPort(String),
 

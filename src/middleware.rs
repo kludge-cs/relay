@@ -13,10 +13,18 @@ pub async fn auth(
 	req: ServiceRequest,
 	cred: BearerAuth,
 ) -> Result<ServiceRequest, (Error, ServiceRequest)> {
-	let cfg = req
-		.app_data::<web::Data<RelayConfig>>()
-		.expect("RelayConfig not found");
+	let cfg = req.app_data::<web::Data<RelayConfig>>();
 
+	let Some(cfg) = cfg else {
+		let err = RelayError::InternalServerError(
+			"configuration not found.".to_string(),
+		);
+
+		return Err((
+			InternalError::from_response("", err.error_response()).into(),
+			req,
+		));
+	};
 	if cred.token() == cfg.key {
 		Ok(req)
 	} else {
